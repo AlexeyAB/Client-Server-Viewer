@@ -31,7 +31,8 @@ protected:
 	boost::scoped_ptr<boost::thread> thread_ptr;
 	boost::scoped_ptr<ba::io_service> io_service_ptr;
 	boost::scoped_ptr<T_client> client_ptr;
-	boost::mutex mtx_new_connection, mtx_reset_connection;
+	boost::mutex mtx_reset_connection;
+	volatile bool connecting_in_progress;
 	void Create_new_connection(std::string server_address, unsigned int server_port, unsigned int timeout);
 
 	// Созданные функции схемы сообщений
@@ -47,4 +48,5 @@ public:
 	void show_data(const int delta_index);
 	afx_msg void OnBnClickedButton1();
 	afx_msg void OnBnClickedButton2();
+	afx_msg void OnNMThemeChangedScrollbar1(NMHDR *pNMHDR, LRESULT *pResult);
 };

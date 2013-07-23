@@ -31,12 +31,28 @@ size_t T_client::load(const size_t i_block) {
 		boost::system::error_code err;
 
 		// Send number of page
-		ba::write(client_socket_, ba::buffer(&block_position, sizeof(block_position)), err);
-		if(!!err) throw std::runtime_error("Connection false!");
+		//ba::write(client_socket_, ba::buffer(&block_position, sizeof(block_position)), err);
+		{
+			volatile bool f_done = false;
+			deadline_.expires_from_now(timeout_);
+			ba::async_write(client_socket_, ba::buffer(&block_position, sizeof(block_position)),
+				boost::bind(&handle_async, boost::ref(f_done), boost::ref(err), ba::placeholders::error) );
+			do { client_socket_.get_io_service().run_one(); } while (f_done != true);
+			deadline_.expires_from_now(boost::posix_time::pos_infin);
+		}
+		if(!!err) throw std::runtime_error("Connection false: "  + err.message());
 
 		// Get data of page
-		ba::read(client_socket_, ba::buffer(temp_buffer, c_block_size), err);	
-		if(!!err) throw std::runtime_error("Connection false!");
+		//ba::read(client_socket_, ba::buffer(temp_buffer, c_block_size), err);	
+		{
+			volatile bool f_done = false;
+			deadline_.expires_from_now(timeout_);
+			ba::async_read(client_socket_, ba::buffer(temp_buffer, c_block_size),
+				boost::bind(&handle_async, boost::ref(f_done), boost::ref(err), ba::placeholders::error) );
+			do { client_socket_.get_io_service().run_one(); } while (f_done != true);
+			deadline_.expires_from_now(boost::posix_time::pos_infin);
+		}
+		if(!!err) throw std::runtime_error("Connection false: " + err.message());
 
 		for(size_t i = 0; i < c_block_size; ++i)
 			if(temp_buffer[i] == 0) return i;
@@ -84,10 +100,6 @@ T_client::T_client(ba::io_service& io_service, unsigned int remote_port, std::st
 		boost::system::error_code err;
 		address_n_port_ = remote_address + ":" + boost::lexical_cast<std::string>(remote_port);
 
-		//int32_t timeout_sec = 1 * 1000;
-		//setsockopt(client_socket_.native(), SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout_sec, sizeof(timeout_sec));
-		//setsockopt(client_socket_.native(), SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout_sec, sizeof(timeout_sec));
-
 		// Start deadline timer and its checker
 		check_deadline();
 	
@@ -120,6 +132,7 @@ T_client::T_client(ba::io_service& io_service, unsigned int remote_port, std::st
 				deadline_.expires_from_now(timeout_);
 				client_socket_.async_connect(endpoint, boost::bind(&handle_async, boost::ref(f_done), boost::ref(err), ba::placeholders::error) );
 				do { client_socket_.get_io_service().run_one(); } while (f_done != true);
+				deadline_.expires_from_now(boost::posix_time::pos_infin);
 			}
 			if(!!err) ++it;			
 			if(it == ba::ip::tcp::resolver::iterator())
@@ -138,6 +151,7 @@ T_client::T_client(ba::io_service& io_service, unsigned int remote_port, std::st
 						ba::transfer_exactly(sizeof(file_size)), 
 						boost::bind(&handle_async, boost::ref(f_done), boost::ref(err), ba::placeholders::error) );
 			do { client_socket_.get_io_service().run_one(); } while (f_done != true);
+			deadline_.expires_from_now(boost::posix_time::pos_infin);
 		}
 
 		if(!!err) 

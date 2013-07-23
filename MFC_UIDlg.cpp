@@ -75,6 +75,7 @@ BEGIN_MESSAGE_MAP(CMFC_UIDlg, CDialogEx)
 	ON_NOTIFY(UDN_DELTAPOS, IDC_SPIN1, &CMFC_UIDlg::OnDeltaposSpin1)
 	ON_BN_CLICKED(IDC_BUTTON1, &CMFC_UIDlg::OnBnClickedButton1)
 	ON_BN_CLICKED(IDC_BUTTON2, &CMFC_UIDlg::OnBnClickedButton2)
+	ON_NOTIFY(NM_THEMECHANGED, IDC_SCROLLBAR1, &CMFC_UIDlg::OnNMThemeChangedScrollbar1)
 END_MESSAGE_MAP()
 
 
@@ -115,12 +116,12 @@ BOOL CMFC_UIDlg::OnInitDialog()
 	CEdit &Edit3 = *((CEdit *)(GetDlgItem(IDC_EDIT3)));
 	CEdit &Edit6 = *((CEdit *)(GetDlgItem(IDC_EDIT6)));
 	CEdit &Edit7 = *((CEdit *)(GetDlgItem(IDC_EDIT7)));
-	Edit1.SetLimitText(T_load_file::c_block_size);
+	//Edit1.SetLimitText(T_load_file::c_block_size);
 	Edit2.SetWindowTextW(CString("127.0.0.1"));
 	Edit3.SetWindowTextW(CString("10001"));
 	Edit6.SetWindowTextW(CString("1"));
 	Edit7.SetWindowTextW(CString("0"));
-//	show_data(0);
+	connecting_in_progress = false;
 
 	return TRUE;  // возврат значения TRUE, если фокус не передан элементу управления
 }
@@ -192,7 +193,6 @@ void CMFC_UIDlg::Create_new_connection(std::string server_address, unsigned int 
 		std::string connecting = "Соединяется с: " + server_address + ":" + boost::lexical_cast<std::string>(server_port);
 		Edit8.SetWindowTextW(CString(connecting.c_str()));
 
-		boost::lock_guard<boost::mutex> lock_new_connection(mtx_new_connection);
 		ba::io_service* io_service_raw_ptr = new ba::io_service;
 		T_client* client_raw_ptr = new T_client(*io_service_raw_ptr, server_port, server_address, timeout );
 
@@ -203,6 +203,14 @@ void CMFC_UIDlg::Create_new_connection(std::string server_address, unsigned int 
 		CEdit &Edit5 = *((CEdit *)(GetDlgItem(IDC_EDIT5)));		
 		Edit4.SetWindowTextW(CString(client_ptr->get_address_n_port().c_str()));
 		Edit5.SetWindowTextW(CString(cast_to_cstring(client_ptr->get_max_block_position())));
+
+		/*
+		CEdit &Edit1 = *((CEdit *)(GetDlgItem(IDC_EDIT1)));
+		CScrollBar &ScrollBar = *((CScrollBar *)(GetDlgItem(IDC_SCROLLBAR1)));
+		ScrollBar.SetScrollRange(0, 1, TRUE);
+		Edit1.SetScrollRange(SB_VERT, 0, 5, TRUE);
+		Edit1.ShowScrollBar(SB_VERT);*/
+
 		show_data(0);
 		Edit8.SetWindowTextW(CString("Успешно"));
 	} catch(std::exception const& ex) {
@@ -211,6 +219,7 @@ void CMFC_UIDlg::Create_new_connection(std::string server_address, unsigned int 
 		AfxMessageBox(CString("Unknown exception!"));
 	}
 	Edit8.SetWindowTextW(CString(""));
+	connecting_in_progress = false;
 }
 
 /// Connect to the server
@@ -235,19 +244,20 @@ void CMFC_UIDlg::OnBnClickedButton1()
 		unsigned int server_port = boost::lexical_cast<unsigned int>(ServerPortAnsiString);
 		unsigned int timeout = boost::lexical_cast<unsigned int>(TimeoutAnsiString);
 				
-		if(!mtx_new_connection.try_lock()) {
-			AfxMessageBox(CString("Connection already in progress!"));
-			return;
-		}else
-			mtx_new_connection.unlock();
-
-		thread_ptr.reset(
-			new boost::thread(boost::bind(&CMFC_UIDlg::Create_new_connection, this, server_address, server_port, timeout)) );
+		if(!connecting_in_progress) {
+			connecting_in_progress = true;
+			thread_ptr.reset(
+				new boost::thread(boost::bind(&CMFC_UIDlg::Create_new_connection, this, server_address, server_port, timeout)) );
+		} else {
+			AfxMessageBox(CString("Connecting already in progress!"));
+		}
 
 	} catch(std::exception const& ex) {
 		AfxMessageBox(CString(ex.what()));
+		connecting_in_progress = false;
 	} catch(...) {
 		AfxMessageBox(CString("Unknown exception!"));
+		connecting_in_progress = false;
 	}	
 
 	// TODO: добавьте свой код обработчика уведомлений
@@ -319,4 +329,13 @@ void CMFC_UIDlg::OnBnClickedButton2()
 	} catch(...) {
 		AfxMessageBox(CString("Unknown exception!"));
 	}	
+}
+
+
+void CMFC_UIDlg::OnNMThemeChangedScrollbar1(NMHDR *pNMHDR, LRESULT *pResult)
+{
+	// Для этого средства требуется Windows XP или более поздняя версия.
+	// Символ _WIN32_WINNT должен быть >= 0x0501.
+	// TODO: добавьте свой код обработчика уведомлений
+	*pResult = 0;
 }

@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
 	std::ofstream file_log, file_error;
 	try {
 		std::locale::global(std::locale("rus"));
-		std::cout << "Usage: asio_server.exe [file_name local_port local_address timeout_sec number_acceptors numer_executors language_locale]" << std::endl << std::endl;
+		std::cout << "Usage: asio_server.exe [file_name local_port local_address timeout_sec number_acceptors number_executors language_locale]" << std::endl << std::endl;
 
 #ifdef _MSC_VER
 		std::cout << "_MSC_VER  = " << _MSC_VER  << std::endl; 
