@@ -28,7 +28,7 @@ size_t T_load_file::load(const size_t i_block) {
 }
 
 /// Initialize temporary buffer, file stream, open file and get its size
-T_load_file::T_load_file(const std::string &in_file_name)
+T_load_file::T_load_file(const std::string &in_file_name) : file_name(in_file_name)
 {
 	temp_buffer[0] = 0;
 	// Don't use std::ios:ate for opening large file (large than 4 GB), without std::ios:ate works in MSVS2010(VC10/_MSC_VER == 1600)

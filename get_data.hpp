@@ -13,6 +13,7 @@
 #include <boost/array.hpp>
 #include <fstream>
 #include <cstdint>
+#include <string>
 // ----------------------------------------------------------------------------
 
 /// Abstract class of getting data of file
@@ -37,6 +38,9 @@ public:
 
 	/// Reposition on the different page and get data from this page 
 	virtual size_t reposition_and_load(const int64_t delta_index) = 0;
+
+	/// Get information about source of the file
+	virtual std::string const& get_source() const = 0;
 };
 
 // ----------------------------------------------------------------------------

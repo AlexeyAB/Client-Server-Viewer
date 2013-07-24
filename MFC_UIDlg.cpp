@@ -8,6 +8,7 @@
 #include "afxdialogex.h"
 
 #include <boost/lexical_cast.hpp>
+#include <boost/make_shared.hpp>
 
 template<typename T>
 static inline CString cast_to_cstring(T const& src) {
@@ -56,8 +57,7 @@ END_MESSAGE_MAP()
 
 
 CMFC_UIDlg::CMFC_UIDlg(CWnd* pParent /*=NULL*/)
-	: CDialogEx(CMFC_UIDlg::IDD, pParent)
-	//, client(io_service, 10001, "127.0.0.1")
+	: CDialogEx(CMFC_UIDlg::IDD, pParent), file_view(17)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -71,11 +71,9 @@ BEGIN_MESSAGE_MAP(CMFC_UIDlg, CDialogEx)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
-	ON_EN_VSCROLL(IDC_EDIT1, &CMFC_UIDlg::OnEnVscrollEdit1)
-	ON_NOTIFY(UDN_DELTAPOS, IDC_SPIN1, &CMFC_UIDlg::OnDeltaposSpin1)
 	ON_BN_CLICKED(IDC_BUTTON1, &CMFC_UIDlg::OnBnClickedButton1)
 	ON_BN_CLICKED(IDC_BUTTON2, &CMFC_UIDlg::OnBnClickedButton2)
-	ON_NOTIFY(NM_THEMECHANGED, IDC_SCROLLBAR1, &CMFC_UIDlg::OnNMThemeChangedScrollbar1)
+	ON_WM_VSCROLL()
 END_MESSAGE_MAP()
 
 
@@ -122,6 +120,12 @@ BOOL CMFC_UIDlg::OnInitDialog()
 	Edit6.SetWindowTextW(CString("1"));
 	Edit7.SetWindowTextW(CString("0"));
 	connecting_in_progress = false;
+	global_pos = 0;
+	symbols_per_scroll = 50;
+
+	CScrollBar &ScrollBar = *((CScrollBar *)(GetDlgItem(IDC_SCROLLBAR2)));
+	ScrollBar.SetScrollRange(0, 0, TRUE);
+	ScrollBar.SetScrollPos(0);
 
 	return TRUE;  // возврат значения TRUE, если фокус не передан элементу управления
 }
@@ -176,16 +180,6 @@ HCURSOR CMFC_UIDlg::OnQueryDragIcon()
 }
 
 
-
-void CMFC_UIDlg::OnEnVscrollEdit1()
-{
-	//CEdit &Edit1 = *((CEdit *)(GetDlgItem(IDC_EDIT1)));
-	//Edit1.GetScrollPos();
-
-	//AfxMessageBox(CString("Hi"));
-	// TODO: добавьте свой код обработчика уведомлений
-}
-
 // Try to connect to the server
 void CMFC_UIDlg::Create_new_connection(std::string server_address, unsigned int server_port, unsigned int timeout) {
 	CEdit &Edit8 = *((CEdit *)(GetDlgItem(IDC_EDIT8)));
@@ -193,25 +187,46 @@ void CMFC_UIDlg::Create_new_connection(std::string server_address, unsigned int 
 		std::string connecting = "Соединяется с: " + server_address + ":" + boost::lexical_cast<std::string>(server_port);
 		Edit8.SetWindowTextW(CString(connecting.c_str()));
 
-		ba::io_service* io_service_raw_ptr = new ba::io_service;
-		T_client* client_raw_ptr = new T_client(*io_service_raw_ptr, server_port, server_address, timeout );
+		boost::scoped_ptr<ba::io_service> io_service_temp_ptr(new ba::io_service);
+		// Use shared_pointer polymorphism
+		// (If it need - for reverse conversion need to use boost::dynamic_pointer_cast<T_client>() )
+		boost::shared_ptr<T_get_data> client_temp_ptr = 
+			boost::make_shared<T_client>(*io_service_temp_ptr.get(), server_port, server_address, timeout );
 
-		boost::lock_guard<boost::mutex> lock_reset_connection(mtx_reset_connection);
-		client_ptr.reset(client_raw_ptr);
-		io_service_ptr.reset(io_service_raw_ptr);
+		{
+			// lock mutex for init variables of the new connection
+			boost::lock_guard<boost::recursive_mutex> lock_reset_connection(mtx_reset_connection);
+			file_view.client_ptr.swap(client_temp_ptr);
+			io_service_ptr.swap(io_service_temp_ptr);
+
+			// get file size
+			file_size = file_view.get_file_size();
+
+			// calculate scroll bar resolution
+			if(file_size < 32700) symbols_per_scroll = 1;
+			else symbols_per_scroll = file_size/32700;
+
+			// reset position of file_view object
+			file_view.reset_position(symbols_per_scroll);
+
+			// set actual range for the ScrollBar
+			CScrollBar &ScrollBar = *((CScrollBar *)(GetDlgItem(IDC_SCROLLBAR2)));
+			ScrollBar.SetScrollRange(0, file_size/symbols_per_scroll, TRUE);
+			ScrollBar.SetScrollPos(0);
+
+			// set global position
+			global_pos = -1;
+		}
+
+		// show address:port and size of file
 		CEdit &Edit4 = *((CEdit *)(GetDlgItem(IDC_EDIT4)));
-		CEdit &Edit5 = *((CEdit *)(GetDlgItem(IDC_EDIT5)));		
-		Edit4.SetWindowTextW(CString(client_ptr->get_address_n_port().c_str()));
-		Edit5.SetWindowTextW(CString(cast_to_cstring(client_ptr->get_max_block_position())));
+		CEdit &Edit5 = *((CEdit *)(GetDlgItem(IDC_EDIT5)));
+		Edit4.SetWindowTextW(CString(cast_to_cstring(file_view.get_source())));
+		Edit5.SetWindowTextW(CString(cast_to_cstring(file_size)));
 
-		/*
-		CEdit &Edit1 = *((CEdit *)(GetDlgItem(IDC_EDIT1)));
-		CScrollBar &ScrollBar = *((CScrollBar *)(GetDlgItem(IDC_SCROLLBAR1)));
-		ScrollBar.SetScrollRange(0, 1, TRUE);
-		Edit1.SetScrollRange(SB_VERT, 0, 5, TRUE);
-		Edit1.ShowScrollBar(SB_VERT);*/
-
+		// show data in Edit(Memo)
 		show_data(0);
+
 		Edit8.SetWindowTextW(CString("Успешно"));
 	} catch(std::exception const& ex) {
 		AfxMessageBox(CString(ex.what()));
@@ -246,8 +261,11 @@ void CMFC_UIDlg::OnBnClickedButton1()
 				
 		if(!connecting_in_progress) {
 			connecting_in_progress = true;
-			thread_ptr.reset(
-				new boost::thread(boost::bind(&CMFC_UIDlg::Create_new_connection, this, server_address, server_port, timeout)) );
+			boost::thread(boost::bind(&CMFC_UIDlg::Create_new_connection, this, server_address, server_port, timeout)).detach();
+			// By default in (BOOST_THREAD_VERSION == 2) in destructor of boost::thread is called: thread_ptr->detach();
+			// In (BOOST_THREAD_VERSION >= 3) in destructor is called: if (joinable()) { std::terminate(); }
+			// it can provide deadlock. To avoid this we do it(detach) manualy. 
+			// http://www.boost.org/doc/libs/1_53_0/boost/thread/detail/thread.hpp
 		} else {
 			AfxMessageBox(CString("Connecting already in progress!"));
 		}
@@ -261,41 +279,26 @@ void CMFC_UIDlg::OnBnClickedButton1()
 	}	
 
 	// TODO: добавьте свой код обработчика уведомлений
-
 }
 
 
-/// Button to switch the page
-void CMFC_UIDlg::OnDeltaposSpin1(NMHDR *pNMHDR, LRESULT *pResult)
-{	
-	boost::lock_guard<boost::mutex> lock_reset_connection(mtx_reset_connection);
-	LPNMUPDOWN pNMUpDown = reinterpret_cast<LPNMUPDOWN>(pNMHDR);
-	show_data(pNMUpDown->iDelta);	// See the text of another page
-
-	*pResult = 0;
-}
-
-/// See the text of another page
-void CMFC_UIDlg::show_data(const int delta_index) {
-	try {		
-		if(!client_ptr) {
-			AfxMessageBox(CString("Try first to connect!"));
+/// Show the text of another page
+void CMFC_UIDlg::show_data(const size_t pos) {
+	try {
+		if(!file_view.client_ptr) {
+			// This function can emit event and immediately call to the same handler in this thread and lock the same mutex again.
+			// If we use mutex we can get deadlock. To resolve this problem need to use recursive_mutex.
+			AfxMessageBox(CString("Try first to connect!"));	
 			return;
 		}
 		CEdit &Edit1 = *((CEdit *)(GetDlgItem(IDC_EDIT1)));
 		CEdit &Edit2 = *((CEdit *)(GetDlgItem(IDC_EDIT2)));
+		CScrollBar &ScrollBar = *((CScrollBar *)(GetDlgItem(IDC_SCROLLBAR2)));
 
-		size_t block_position = client_ptr->get_block_position();
-		Edit2.SetWindowTextW(cast_to_cstring(block_position));
+		std::string res_str = file_view.get_strings_for_pos(pos);
+		Edit1.SetWindowTextW(CString(res_str.c_str()));
+		Edit2.SetWindowTextW(cast_to_cstring(pos));
 
-		const size_t read_size = client_ptr->reposition_and_load(delta_index);
-
-		//block_position = load_file.get_block_position();
-		if(block_position != client_ptr->get_block_position() || delta_index == 0) {
-			block_position = client_ptr->get_block_position();
-			Edit2.SetWindowTextW(cast_to_cstring(block_position));
-			Edit1.SetWindowTextW(CString(client_ptr->get_buffer()));
-		}
 	} catch(std::exception const& ex) {
 		AfxMessageBox(CString(ex.what()));
 	} catch(...) {
@@ -303,39 +306,84 @@ void CMFC_UIDlg::show_data(const int delta_index) {
 	}	
 }
 
-/// Go to the entered page number
+// Event by scroll bar of Edit1(Memo)
+void CMFC_UIDlg::OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
+{
+	try {
+		// wait for init variables of the new connection
+		boost::lock_guard<boost::recursive_mutex> lock_reset_connection(mtx_reset_connection);
+		if(!pScrollBar) return;
+		CScrollBar &ScrollBar = *((CScrollBar *)(GetDlgItem(IDC_SCROLLBAR2)));
+
+		if(pScrollBar == &ScrollBar) {
+
+			switch (nSBCode) 
+			{
+				case SB_THUMBTRACK: 
+					ScrollBar.SetScrollPos(nPos); 
+					global_pos = nPos*symbols_per_scroll; 
+					break;
+				/*case SB_THUMBPOSITION: 
+					ScrollBar.SetScrollPos(nPos); 
+					global_pos = nPos*symbols_per_scroll; 
+					break;*/
+				case SB_PAGEDOWN: 
+					global_pos += 10000;
+					if(global_pos > file_size)
+						global_pos = file_size;
+					ScrollBar.SetScrollPos(global_pos/symbols_per_scroll); 
+					break;
+				case SB_PAGEUP: 
+					if(global_pos >= 10000) global_pos -= 10000;
+					else global_pos = 0;
+					ScrollBar.SetScrollPos(global_pos/symbols_per_scroll); 
+				case SB_LINEDOWN: 
+					global_pos += file_view.get_next_row_size();
+					if(global_pos > file_size)
+						global_pos = file_size;
+					ScrollBar.SetScrollPos(global_pos/symbols_per_scroll); 
+					break;
+				case SB_LINEUP: 
+					if(global_pos >= file_view.get_prev_row_size()) global_pos -= file_view.get_prev_row_size();
+					else global_pos = 0;
+					ScrollBar.SetScrollPos(global_pos/symbols_per_scroll); 
+					break;
+				default: return;
+			}
+
+			show_data(global_pos);
+
+		}
+
+	} catch(std::exception const& ex) {
+		AfxMessageBox(CString(ex.what()));
+	} catch(...) {
+		AfxMessageBox(CString("Unknown exception!"));
+	}	
+}
+
+/// Go to the entered offset number
 void CMFC_UIDlg::OnBnClickedButton2()
 {
 	// TODO: добавьте свой код обработчика уведомлений
 	try {
-		boost::lock_guard<boost::mutex> lock_reset_connection(mtx_reset_connection);
-		if(!client_ptr) {
-			AfxMessageBox(CString("Try first to connect!"));
-			return;
-		}
+		// wait for init variables of the new connection
+		boost::lock_guard<boost::recursive_mutex> lock_reset_connection(mtx_reset_connection);
 
-		CEdit &Edit1 = *((CEdit *)(GetDlgItem(IDC_EDIT1)));
-		CEdit &Edit2 = *((CEdit *)(GetDlgItem(IDC_EDIT2)));
 		CEdit &Edit7 = *((CEdit *)(GetDlgItem(IDC_EDIT7)));
 		CString PageIndex;
 		Edit7.GetWindowTextW(PageIndex);
 		CT2CA PageIndexAnsiString(PageIndex);
-		client_ptr->load(boost::lexical_cast<unsigned int>(PageIndexAnsiString));
-		Edit2.SetWindowTextW(cast_to_cstring(client_ptr->get_block_position()));
-		Edit1.SetWindowTextW(CString(client_ptr->get_buffer()));
+		global_pos = boost::lexical_cast<unsigned int>(PageIndexAnsiString);
+
+		CScrollBar &ScrollBar = *((CScrollBar *)(GetDlgItem(IDC_SCROLLBAR2)));
+		ScrollBar.SetScrollPos(global_pos/symbols_per_scroll); 
+
+		show_data(global_pos);
 
 	} catch(std::exception const& ex) {
 		AfxMessageBox(CString(ex.what()));
 	} catch(...) {
 		AfxMessageBox(CString("Unknown exception!"));
 	}	
-}
-
-
-void CMFC_UIDlg::OnNMThemeChangedScrollbar1(NMHDR *pNMHDR, LRESULT *pResult)
-{
-	// Для этого средства требуется Windows XP или более поздняя версия.
-	// Символ _WIN32_WINNT должен быть >= 0x0501.
-	// TODO: добавьте свой код обработчика уведомлений
-	*pResult = 0;
 }

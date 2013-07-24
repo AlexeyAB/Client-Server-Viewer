@@ -48,7 +48,7 @@ public:
 	}
 
 	/// Get a string, that contain address and port of the remote server
-	std::string const& get_address_n_port() const {
+	virtual std::string const& get_source() const {
 		return address_n_port_;
 	}
 };
