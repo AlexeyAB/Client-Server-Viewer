@@ -195,7 +195,7 @@ void CMFC_UIDlg::Create_new_connection(std::string server_address, unsigned int 
 
 		{
 			// lock mutex for init variables of the new connection
-			boost::lock_guard<boost::recursive_mutex> lock_reset_connection(mtx_reset_connection);
+			boost::lock_guard<boost::mutex> lock_reset_connection(mtx_reset_connection);
 			file_view.client_ptr.swap(client_temp_ptr);
 			io_service_ptr.swap(io_service_temp_ptr);
 
@@ -311,7 +311,7 @@ void CMFC_UIDlg::OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar)
 {
 	try {
 		// wait for init variables of the new connection
-		boost::lock_guard<boost::recursive_mutex> lock_reset_connection(mtx_reset_connection);
+		boost::lock_guard<boost::mutex> lock_reset_connection(mtx_reset_connection);
 		if(!pScrollBar) return;
 		CScrollBar &ScrollBar = *((CScrollBar *)(GetDlgItem(IDC_SCROLLBAR2)));
 
@@ -368,7 +368,7 @@ void CMFC_UIDlg::OnBnClickedButton2()
 	// TODO: добавьте свой код обработчика уведомлений
 	try {
 		// wait for init variables of the new connection
-		boost::lock_guard<boost::recursive_mutex> lock_reset_connection(mtx_reset_connection);
+		boost::lock_guard<boost::mutex> lock_reset_connection(mtx_reset_connection);
 
 		CEdit &Edit7 = *((CEdit *)(GetDlgItem(IDC_EDIT7)));
 		CString PageIndex;

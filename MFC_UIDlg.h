@@ -36,8 +36,8 @@ protected:
 
 	boost::scoped_ptr<ba::io_service> io_service_ptr;	/// unique pointer, of I/O service for exchange data with the server
 	T_file_view file_view;								/// object, that allows to view the remote file
-	boost::recursive_mutex mtx_reset_connection;		/// recursive_mutex for thread-safe using of the unique pointer to the client object
-	//boost::mutex mtx_reset_connection;				/// mutex for thread-safe using of the unique pointer to the client object
+	//boost::recursive_mutex mtx_reset_connection;		/// recursive_mutex for thread-safe using of the unique pointer to the client object
+	boost::mutex mtx_reset_connection;				/// mutex for thread-safe using of the unique pointer to the client object
 	volatile bool connecting_in_progress;				/// volatile flag - for thread-safe detecting, that connecting in progress
 
 	// Try to connect to the server
