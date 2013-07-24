@@ -183,6 +183,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="client.hpp" />
+    <ClInclude Include="file_view.hpp" />
     <ClInclude Include="get_data.hpp" />
     <ClInclude Include="MFC_UI.h" />
     <ClInclude Include="MFC_UIDlg.h" />
@@ -192,6 +193,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="client.cpp" />
+    <ClCompile Include="file_view.cpp" />
     <ClCompile Include="MFC_UI.cpp" />
     <ClCompile Include="MFC_UIDlg.cpp" />
     <ClCompile Include="stdafx.cpp" />
