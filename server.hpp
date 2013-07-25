@@ -30,7 +30,7 @@ namespace ba = boost::asio;
 /// 
 ///
 class T_server : private boost::noncopyable {
-	enum { connections_in_memory_pool = 10 };   ///< maximum connections in memory pool
+	enum { connections_in_memory_pool = 5 };   ///< maximum connections in memory pool
 public:
 	T_server(const std::string file_name,
 			 ba::io_service& io_service_acceptors, ba::io_service& io_service_executors, 
@@ -52,8 +52,7 @@ public:
 				for(size_t i = 0; i < connections_in_memory_pool; ++i) {
 					try {
 						T_connection &connection_ptr = reinterpret_cast<T_connection *>(ptr)[i];
-						if(&connection_ptr == connection_ptr.get_this())
-							reinterpret_cast<T_connection *>(ptr)[i].~T_connection(); // only call to destructor
+						reinterpret_cast<T_connection *>(ptr)[i].~T_connection(); // only call to destructor
 					} catch(...) {
 						std::cerr << "Can't correct delete connection: " << i << std::endl;
 					}

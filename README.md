@@ -30,9 +30,9 @@ On the server-side, uses:
 
 On the client-side, uses: 
 - very simple GUI only for presentation of network communication capabilities
-- part of operations in asynchronous and synchronous mode
-- setup timeout for some operations, the server address and port
-- navigating over remote file by using spin button or the transition to necessary page 
+- part of operations in blocking and non-blocking asynchronous mode
+- setup the server address, port and timeout for some communication operations
+- navigating over remote file by using only a single ScrollBar.  
 
 Tested and works with very large file - 100GB in Windows7x64.
 

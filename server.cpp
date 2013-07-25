@@ -25,6 +25,7 @@
 /// @param thread_num_executors number of threads in thread pool for executors
 /// @param local_port port to listen on, by default - 10001
 /// @param local_interface_address local interface address to listen on
+/// @param timeout time in seconds for timeout of connection
 ///
 T_server::T_server(const std::string file_name,
 				   ba::io_service& io_service_acceptors, ba::io_service& io_service_executors, 
@@ -122,6 +123,7 @@ T_server::~T_server() {
 void T_server::handle_accept( T_memory_pool_ptr memory_pool_ptr, size_t i_connect, const boost::system::error_code& e) {
 	try {
 		if (!e) {
+			std::cout << "handle_accept() \n";
 			// get pointer of current connection
 			T_connection * const current_memory_pool_raw_ptr = reinterpret_cast<T_connection *>( memory_pool_ptr.get() );
 			T_connection * const current_connection_raw_ptr = &(current_memory_pool_raw_ptr[i_connect]);
@@ -129,7 +131,7 @@ void T_server::handle_accept( T_memory_pool_ptr memory_pool_ptr, size_t i_connec
 
 			// schedule new task to thread pool
 			current_connection_raw_ptr->run(boost::move(current_connection_ptr));	// sync launch of short-task: run()
-		
+
 			// increment index of connections
 			++i_connect;	
 		

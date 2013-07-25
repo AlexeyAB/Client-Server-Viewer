@@ -27,8 +27,21 @@ namespace bs = boost::system;
 /// 
 ///
 class T_connection {
-	struct T_hide_me {};	/// Instead of having to make friend boost::make_shared<connection>()
+
+	/// 
+	/// Constructor for class, initilize socket for this connection
+	/// 
+	/// @param file_name reference to file name of data that are sent to the client
+	/// @param io_service reference to io_service of executors in which this connection will work
+	/// @param timeout time in seconds for timeout of connection
+	/// 
+	/// @return nothing
+	///
+	T_connection(const std::string &file_name, ba::io_service& io_service, const unsigned int timeout);
+
 public:
+	~T_connection();
+
 	typedef boost::shared_ptr<T_connection> T_shared_this;
 		
 	/// bind for clients handler with optimized memory allocation
@@ -38,20 +51,7 @@ public:
 	}
 
 	/// Simple getter of pointer to this object
-	inline T_connection const*const get_this() const { return memorypool_shared_this_.get(); }
-
-	/// 
-	/// Constructor for class, initilize socket for this connection
-	/// 
-	/// @param file_name reference to file name of data that are sent to the client
-	/// @param io_service reference to io_service of executors in which this connection will work
-	/// @param T_hide_me() temporary object that made a constructor private 
-	/// 
-	/// @return nothing
-	///
-	T_connection(const std::string &file_name, ba::io_service& io_service, const unsigned int timeout, T_hide_me);
-
-	~T_connection();
+	//inline T_connection const*const get_this() const { return memorypool_shared_this_.get(); }
 
 	/// 
 	/// Create new connection, throught placement new 
@@ -60,7 +60,7 @@ public:
 	/// @param memory_pool_ptr shared pointer to the allocated memory poll for connections
 	/// @param i_connect index of current connection in memory pool 
 	/// @param io_service io_service in which this connection will work
-	/// 
+	/// @param timeout time in seconds for timeout of connection
 	/// @return pointer to newly allocated object
 	///
 	static inline T_connection *const T_connection::create(const std::string &file_name, 
@@ -69,7 +69,7 @@ public:
 														   ba::io_service& io_service,
 														   const unsigned int timeout) 
 	{
-		return new (&memory_pool_raw_ptr[i_connect]) T_connection(file_name, io_service, timeout, T_hide_me());
+		return new (&memory_pool_raw_ptr[i_connect]) T_connection(file_name, io_service, timeout);
 	}
 
 	/// 
@@ -131,7 +131,7 @@ private:
 	/// 
 	/// Start deadline timer and check it
 	/// 
-	void check_deadline();
+	void check_deadline(const bs::error_code& err);
 
 	enum { allocator_size = 1024 };         ///< size of buffer for handler allocator for storage boost::bind()
 
@@ -142,8 +142,9 @@ private:
 	ba::io_service& io_service_;            ///< reference to io_service, in which work this connection
 	ba::ip::tcp::socket client_socket_;     ///< socket, associated with client
 	T_handler_allocator<allocator_size> client_allocator_;	///< allocator, to use for handler-based custom memory allocation for clients handlers
+	volatile bool stopped_;									///< stoped event loop and the deadline-timer can destruct object
+	const boost::posix_time::time_duration timeout_;		///< object, that contain time for deadline
 	ba::deadline_timer deadline_;							///< object, that set deadline for async operations
-	boost::posix_time::time_duration timeout_;				///< object, that contain time for deadline
 };
 // ----------------------------------------------------------------------------
 

@@ -30,9 +30,9 @@ public:
 protected:
 	HICON m_hIcon;
 
-	size_t symbols_per_scroll;	/// symbols per single step of scroll bar (excluding scroll buttons-rows)	
-	size_t global_pos;			/// global position in remote file
-	size_t file_size;			/// size of remote file
+	volatile size_t symbols_per_scroll;	/// symbols per single step of scroll bar (excluding scroll buttons-rows)	
+	volatile size_t global_pos;			/// global position in remote file
+	volatile size_t file_size;			/// size of remote file
 
 	boost::scoped_ptr<ba::io_service> io_service_ptr;	/// unique pointer, of I/O service for exchange data with the server
 	T_file_view file_view;								/// object, that allows to view the remote file
@@ -41,7 +41,13 @@ protected:
 	volatile bool connecting_in_progress;				/// volatile flag - for thread-safe detecting, that connecting in progress
 
 	// Try to connect to the server
-	void Create_new_connection(std::string server_address, unsigned int server_port, unsigned int timeout);
+	void create_new_connection(std::string server_address, unsigned int server_port, unsigned int timeout);
+
+	/// Show the text of another page
+	void show_data(const size_t pos);
+
+	/// Initialize window for the new data
+	void init_window();
 
 	// Созданные функции схемы сообщений
 	virtual BOOL OnInitDialog();
@@ -55,7 +61,4 @@ protected:
 
 	DECLARE_MESSAGE_MAP()
 public:
-
-	/// Show the text of another page
-	void show_data(const size_t pos);
 };

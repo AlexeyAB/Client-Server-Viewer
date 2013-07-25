@@ -23,16 +23,18 @@
 	/// 
 	/// @param file_name reference to file name of data that are sent to the client
 	/// @param io_service reference to io_service of executors in which this connection will work
-	/// @param T_hide_me() temporary object that made a constructor private 
+	/// @param timeout time in seconds for timeout of connection
 	/// 
 	/// @return nothing
 	///
-	T_connection::T_connection(const std::string &file_name, ba::io_service& io_service, const unsigned int timeout, T_hide_me) :
+	T_connection::T_connection(const std::string &file_name, ba::io_service& io_service, const unsigned int timeout) :
 		io_service_(io_service), client_socket_(io_service)
-		, load_file(file_name), deadline_(io_service), timeout_(boost::posix_time::seconds(timeout))
+		, load_file(file_name), deadline_(io_service), timeout_(boost::posix_time::seconds(timeout)), stopped_(false)
 	{
-		check_deadline();	// start deadline timer
 		std::cout << "T_connection() \n";
+
+		// start deadline timer
+		check_deadline(bs::error_code());	
 	}
 
 	T_connection::~T_connection() { std::cout << "~T_connection() \n"; }
@@ -48,9 +50,8 @@
 		// try/catch and then output to std::cerr exception message .what()
 		try {
 			memorypool_shared_this_ = boost::move(shared_this);
-
 			file_size = load_file.get_file_size();		// may be used htnoll/ntohll
-
+			
 			deadline_.expires_from_now(timeout_);
 			ba::async_write(client_socket_, ba::buffer(&file_size, sizeof(file_size)),
 							client_bind(boost::bind(&T_connection::handle_write_to_client, this,
@@ -126,9 +127,11 @@
 	inline void T_connection::shutdown(const bs::error_code& err, const std::string& throw_place) {
 		// try/catch and then output to std::cerr exception message .what()
 		try {
+			std::cout << "shutdown \n";
+			stopped_ = true;
 			boost::system::error_code ignored_ec;
-			client_socket_.close(ignored_ec);
-			memorypool_shared_this_.reset();
+			deadline_.cancel(ignored_ec);
+			//client_socket_.cancel(ignored_ec);
 		} catch(const seh::T_seh_exception& e) {
 			std::cerr << "T_seh_exception: " << e.what() << "\n ->throw place: " << THROW_PLACE << std::endl;
 		} catch(const bs::system_error& e) {
@@ -144,16 +147,22 @@
 	/// 
 	/// Start deadline timer and check it
 	/// 
-	void T_connection::check_deadline() {
+	void T_connection::check_deadline(const bs::error_code& err) {
 		try {
-			// Check whether the deadline has passed.
-			if (deadline_.expires_at() <= ba::deadline_timer::traits_type::now()) {			  
-				boost::system::error_code ignored_ec;
-				client_socket_.close(ignored_ec);					// The deadline has passed. Stop IO-operations.
-				deadline_.expires_at(boost::posix_time::pos_infin);	// There is no longer an active deadline.
+			// check that the connection was stopped or whether the deadline has passed
+			if(!stopped_ && deadline_.expires_at() > ba::deadline_timer::traits_type::now()) {
+				// what kind of error we got
+				if(!err || err == ba::error::operation_aborted) {
+					// Put the actor back to sleep
+					deadline_.async_wait(boost::bind(&T_connection::check_deadline, this, ba::placeholders::error));
+					return;
+				}
+				// serious error
+				std::cerr << bs::system_error(err).what() << std::endl;
 			}
-			// Put the actor back to sleep.
-			deadline_.async_wait(boost::bind(&T_connection::check_deadline, this));
+			boost::system::error_code ignored_ec;
+			client_socket_.close(ignored_ec);		// The deadline has passed. Stop IO-operations.
+			memorypool_shared_this_.reset();		// object can destruct
 		} catch(...) {
 			std::cerr << "Unknown exception!" << "\n ->throw place: " << THROW_PLACE << std::endl;
 		}

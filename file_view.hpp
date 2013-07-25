@@ -20,12 +20,12 @@ private:
 
 
 	static const size_t c_block_size = T_get_data::c_block_size;	/// size of block which read from the server
-	std::string buffer;						/// local buffer for rows
-	size_t buffer_pos;						/// offset into the file from which the block is loaded from the server
-	size_t prev_row_size, next_row_size;	/// size of prev/next rows - for the move by using scroll rows up/down
-	size_t rows_in_memo;					/// number of rows to show in Edit(Memo)
+	std::string buffer;								/// local buffer for rows
+	volatile size_t buffer_pos;						/// offset into the file from which the block is loaded from the server
+	volatile size_t prev_row_size, next_row_size;	/// size of prev/next rows - for the move by using scroll rows up/down
+	const volatile size_t rows_in_memo;				/// number of rows to show in Edit(Memo)
 
-	size_t symbols_per_scroll;				/// symbols per single step of scroll bar (excluding scroll buttons-rows)	
+	volatile size_t symbols_per_scroll;				/// symbols per single step of scroll bar (excluding scroll buttons-rows)	
 	
 	size_t calc_prev_row_size(const size_t relative_pos) const;
 	size_t calc_next_row_size(const size_t relative_pos) const;
@@ -44,6 +44,11 @@ public:
 		buffer_pos = 0;
 		prev_row_size = 0;
 		next_row_size = 0;
+		buffer.clear();
+	}
+
+	const size_t get_buffer_size() const {
+		return buffer.size();
 	}
 
 	const size_t get_prev_row_size() const {
